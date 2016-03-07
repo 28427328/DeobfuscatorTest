@@ -1,9 +1,13 @@
 /*
-	TO-DO/CHECK:
+	TO-CHECK:
 		1) need to handle the "scale" factor EVERYWHERE on CS_OP_MEM
 		2) to be completed: is_accepting_imm_64(Instruction *ins)
 		3) on register_type I changed from R8 to R15 the BYTE value to 0x20 instead of 0x10
 		4) on collapse_add_sub I changed line 6365
+		5) re-added: mov reg1, 0 / add reg1, reg2 --> mov reg1, reg2
+	TO-FIX:
+		1) test2.txt x32 ---> problems with [base+index*scale+disp]
+		2) test3.txt x64 ---> XOR/XOR/XOR error
 */
 
 #include <stdio.h>
@@ -42,10 +46,10 @@
 //#define CODE "\x66\x51\x68\xCB\x63\x00\x00\x3E\x89\x1C\x24\x66\xBB\xDB\x12\x66\xF7\xD3\x66\x81\xCB\x0C\x39\x66\x81\xF3\x2C\xFD\x55\x66\x89\xDD\x66\x89\xE9\x5D\x3E\x8B\x1C\x24\x56\x3E\x89\x14\x24\x89\xE2\x83\xC2\x04\x83\xEA\x04\x3E\x87\x14\x24\x3E\x8B\x24\x24\x3E\x89\x04\x24\x89\xE0\x83\xC0\x04\x83\xC0\x04\x3E\x87\x04\x24\x3E\x8B\x24\x24\x66\x81\xE9\x4D\x07\x66\x29\xC1\x66\x81\xC1\x4D\x07\x66\x31\xC8\x66\x31\xC1\x66\x31\xC8\x66\x3E\x8B\x0C\x24\x68\x1C\x30\x00\x00\x3E\x89\x2C\x24\x3E\x89\x34\x24\x89\xE6\x53\xBB\x03\x5D\x1F\x70\x50\xB8\x3B\x2C\x32\x60\xC1\xE0\x03\xF7\xD8\xF7\xD8\x05\x2F\xFB\x8D\x6E\x31\xC3\x58\x81\xEE\x40\x2E\x44\x49\x81\xC6\xB0\x58\xDA\x73\x01\xDE\x81\xEE\xB0\x58\xDA\x73\x81\xC6\x40\x2E\x44\x49\x3E\x8B\x1C\x24\x83\xC4\x04\x68\x50\x23\x00\x00\x3E\x89\x2C\x24\xBD\x02\x00\x00\x00\x81\xC6\xDC\x0D\x49\x5F\x01\xEE\x81\xEE\xDC\x0D\x49\x5F\x5D\x3E\x33\x34\x24\x3E\x31\x34\x24\x3E\x33\x34\x24\x3E\x8B\x24\x24"
 
 //test2.txt x32
-//#define CODE "\x83\xEC\x04\x3E\x89\x14\x24\x3E\x89\x0C\x24\x53\x3E\x81\x2C\x24\x2F\x41\x8C\x65\x59\x81\xC1\x2F\x41\x8C\x65\x55\xBD\x33\x06\x3B\x77\x81\xED\x18\x1D\x1F\x25\x57\xBF\xDA\x19\x92\x34\x29\xFD\x5F\x81\xED\xCE\x39\x54\x4D\x81\xF5\x73\x95\x35\xD0\x81\xC1\x2F\x18\x16\x1F\x50\xB8\x2D\x28\x76\x5E\x01\xC1\x3E\x8B\x04\x24\x83\xC4\x04\x01\xE9\x81\xE9\x2D\x28\x76\x5E\x53\x3E\x89\x2C\x24\xBD\x88\x05\x24\x5D\x81\xF5\xA7\x1D\x32\x42\x81\xC1\x9B\x5A\xC1\x00\x29\xE9\x81\xE9\x9B\x5A\xC1\x00\x5D\x3E\x8B\x2C\x24\x83\xC4\x04\x81\xC1\xD4\x78\x68\x26\x01\xE9\x52\x83\xEC\x04\x3E\x89\x3C\x24\xBF\x28\x25\x11\x1D\x89\xFA\x5F\xC1\xEA\x05\x81\xEA\x55\x10\x80\xDA\x29\xD1\x5A\x50\x52\xBA\xD0\x5E\x4A\x0A\x83\xEC\x04\x3E\x89\x34\x24\x68\xF5\x68\x0B\x52\x5E\x81\xF6\xC5\xC9\xBE\xA7\x89\xF0\x5E\x01\xD0\x5A\x01\xC8\x83\x00\x01\x3E\x8B\x04\x24\x83\xC4\x04\x3E\x8B\x0C\x24\x83\xC4\x04"
+#define CODE "\x83\xEC\x04\x3E\x89\x14\x24\x3E\x89\x0C\x24\x53\x3E\x81\x2C\x24\x2F\x41\x8C\x65\x59\x81\xC1\x2F\x41\x8C\x65\x55\xBD\x33\x06\x3B\x77\x81\xED\x18\x1D\x1F\x25\x57\xBF\xDA\x19\x92\x34\x29\xFD\x5F\x81\xED\xCE\x39\x54\x4D\x81\xF5\x73\x95\x35\xD0\x81\xC1\x2F\x18\x16\x1F\x50\xB8\x2D\x28\x76\x5E\x01\xC1\x3E\x8B\x04\x24\x83\xC4\x04\x01\xE9\x81\xE9\x2D\x28\x76\x5E\x53\x3E\x89\x2C\x24\xBD\x88\x05\x24\x5D\x81\xF5\xA7\x1D\x32\x42\x81\xC1\x9B\x5A\xC1\x00\x29\xE9\x81\xE9\x9B\x5A\xC1\x00\x5D\x3E\x8B\x2C\x24\x83\xC4\x04\x81\xC1\xD4\x78\x68\x26\x01\xE9\x52\x83\xEC\x04\x3E\x89\x3C\x24\xBF\x28\x25\x11\x1D\x89\xFA\x5F\xC1\xEA\x05\x81\xEA\x55\x10\x80\xDA\x29\xD1\x5A\x50\x52\xBA\xD0\x5E\x4A\x0A\x83\xEC\x04\x3E\x89\x34\x24\x68\xF5\x68\x0B\x52\x5E\x81\xF6\xC5\xC9\xBE\xA7\x89\xF0\x5E\x01\xD0\x5A\x01\xC8\x83\x00\x01\x3E\x8B\x04\x24\x83\xC4\x04\x3E\x8B\x0C\x24\x83\xC4\x04"
 
 //test3.txt x32
-#define CODE "\x3E\xFF\x74\x1D\x00\x50\x89\xE0\x83\xEC\x04\x3E\x89\x14\x24\x53\x55\x3E\x89\x0C\x24\xB9\x31\x0B\x48\x3E\x56\xBE\xE5\x52\x3C\x7D\x81\xC6\x98\x51\x02\x75\x46\x81\xC6\xC6\xB2\x67\xD2\x89\xF3\x5E\x81\xEB\x03\x63\x27\x54\x01\xCB\x81\xC3\x03\x63\x27\x54\x59\x50\x89\xD8\x89\xC2\x58\x5B\xF7\xDA\x83\xEC\x04\x3E\x89\x34\x24\xBE\x9E\x2C\x2F\x01\x29\xF2\x5E\x51\xB9\xFF\xFF\xFF\xFF\x29\xCA\x59\xD1\xEA\x81\xEA\x73\x38\xF1\x7D\x01\xD0\x5A\x83\xE8\x04\x3E\x87\x04\x24\x3E\x8B\x24\x24\x3E\x89\x14\x24\x3E\x8F\x44\x1D\x00\x5A\x81\xC2\xFF\xFF\xFF\xFF\x3E\x31\x54\x1D\x00\x50\x89\xD8\x83\xC0\x00\x2D\xBB\x69\xEC\x02\x01\xE8\x51\x68\x1D\x64\x7D\x26\x59\x81\xE9\x62\xFA\x90\x23\x01\xC8\x59\x33\x10\x58\x3E\x31\x54\x1D\x00\x3E\xFF\x74\x1D\x00\x3E\xF7\x14\x24\x3E\x8F\x44\x1D\x00"
+//#define CODE "\x3E\xFF\x74\x1D\x00\x50\x89\xE0\x83\xEC\x04\x3E\x89\x14\x24\x53\x55\x3E\x89\x0C\x24\xB9\x31\x0B\x48\x3E\x56\xBE\xE5\x52\x3C\x7D\x81\xC6\x98\x51\x02\x75\x46\x81\xC6\xC6\xB2\x67\xD2\x89\xF3\x5E\x81\xEB\x03\x63\x27\x54\x01\xCB\x81\xC3\x03\x63\x27\x54\x59\x50\x89\xD8\x89\xC2\x58\x5B\xF7\xDA\x83\xEC\x04\x3E\x89\x34\x24\xBE\x9E\x2C\x2F\x01\x29\xF2\x5E\x51\xB9\xFF\xFF\xFF\xFF\x29\xCA\x59\xD1\xEA\x81\xEA\x73\x38\xF1\x7D\x01\xD0\x5A\x83\xE8\x04\x3E\x87\x04\x24\x3E\x8B\x24\x24\x3E\x89\x14\x24\x3E\x8F\x44\x1D\x00\x5A\x81\xC2\xFF\xFF\xFF\xFF\x3E\x31\x54\x1D\x00\x50\x89\xD8\x83\xC0\x00\x2D\xBB\x69\xEC\x02\x01\xE8\x51\x68\x1D\x64\x7D\x26\x59\x81\xE9\x62\xFA\x90\x23\x01\xC8\x59\x33\x10\x58\x3E\x31\x54\x1D\x00\x3E\xFF\x74\x1D\x00\x3E\xF7\x14\x24\x3E\x8F\x44\x1D\x00"
 
 //test4.txt x32
 //#define CODE "\x68\x5D\x07\x00\x00\x3E\x89\x14\x24\x3E\x89\x04\x24\x68\xB1\x74\x00\x00\x3E\x89\x3C\x24\x89\xE7\x51\xB9\x04\x00\x00\x00\x81\xC7\x3E\x47\x37\x1D\x01\xCF\x81\xEF\x3E\x47\x37\x1D\x59\x68\x90\x52\x00\x00\x3E\x89\x0C\x24\xB9\x04\x00\x00\x00\x81\xEF\xF3\x5E\xA3\x7C\x29\xCF\x81\xC7\xF3\x5E\xA3\x7C\x3E\x8B\x0C\x24\x83\xC4\x04\x3E\x87\x3C\x24\x3E\x8B\x24\x24\x3E\x89\x0C\x24\x58\x3E\xFF\x34\x24\x3E\x8B\x0C\x24\x52\x3E\x89\x1C\x24\x3E\x89\x14\x24\x68\xE0\x4F\x00\x00\x3E\x89\x24\x24\x3E\x83\x04\x24\x04\x5A\x68\x8B\x6B\x00\x00\x3E\x89\x2C\x24\xBD\x04\x00\x00\x00\x01\xEA\x5D\x51\xB9\x04\x00\x00\x00\x01\xCA\x59\x3E\x87\x14\x24\x5C\x52\x54\x3E\x8B\x14\x24\x83\xC4\x04\x55\xBD\xED\x0C\x26\x0A\x81\xED\xE9\x0C\x26\x0A\x81\xC2\xA0\x1A\x7A\x22\x01\xEA\x81\xEA\xA0\x1A\x7A\x22\x3E\xFF\x34\x24\x3E\x8B\x2C\x24\x83\xC4\x04\x83\xC4\x04\x83\xC2\x04\x52\x3E\xFF\x74\x24\x04\x5A\x3E\x8F\x04\x24\x3E\x8B\x24\x24"
@@ -125,8 +129,9 @@
 //#define CODE "\x56\x52\x66\x41\x0F\xB6\xF2\x49\x0F\xB7\xF2\x9C\x50\x44\x0F\xAB\xF0\x41\x54\x44\x00\xE0\x57\x41\x51\x66\x44\x0F\xBC\xE2\x66\xC1\xE0\xE8\x66\x0F\xAB\xD8\x41\x56\x41\x52\x41\x55\x51\x66\x81\xD7\x52\x41\x0F\xBC\xC7\x41\x53\x53\xD2\xC8\x55\x66\x0F\xBC\xFF\x48\x98\x48\xC7\xC0\x00\x00\x00\x00\x50\x41\xF6\xC0\xAF\x81\xC7\x51\x48\xA9\x76\x49\x0F\xBA\xF4\x20\x48\x8B\xB4\x24\x90\x00\x00\x00\x0F\xCE\x49\x21\xDC\x66\x41\xC1\xCC\x12\x44\x30\xF5\x81\xEE\xA7\x63\xD2\x67\x41\xD2\xD4\x66\x0F\xBA\xF5\x75\x81\xF6\x61\x4B\x28\x2C\x44\x28\xCF\x0F\xCF\x81\xEE\xB9\x71\x13\x41\xD1\xC6\x48\x8D\x34\x06\x66\x09\xCF\x48\xB8\x00\x00\x00\x00\x01\x00\x00\x00\x48\x8D\x34\x06\x41\xF7\xD4\xD2\xDF\x48\x89\xE5\x41\xC0\xFC\x08\x48\x81\xEC\x40\x01\x00\x00"
 //#define CODE "\x68\x32\x54\x76\x00\x56\x52\x66\x41\x0F\xB6\xF2\x49\x0F\xB7\xF2\x9C\x50\x44\x0F\xAB\xF0\x41\x54\x44\x00\xE0\x57\x41\x51\x66\x44\x0F\xBC\xE2\x66\xC1\xE0\xE8\x66\x0F\xAB\xD8\x41\x56\x41\x52\x41\x55\x51\x66\x81\xD7\x52\x41\x0F\xBC\xC7\x41\x53\x53\xD2\xC8\x55\x66\x0F\xBC\xFF\x48\x98\x48\xC7\xC0\x00\x00\x00\x00\x50\x41\xF6\xC0\xAF\x81\xC7\x51\x48\xA9\x76\x49\x0F\xBA\xF4\x20\x48\x8B\xB4\x24\x90\x00\x00\x00\x0F\xCE\x49\x21\xDC\x66\x41\xC1\xCC\x12\x44\x30\xF5\x81\xEE\xA7\x63\xD2\x67\x41\xD2\xD4\x66\x0F\xBA\xF5\x75\x81\xF6\x61\x4B\x28\x2C\x44\x28\xCF\x0F\xCF\x81\xEE\xB9\x71\x13\x41\xD1\xC6\x48\x8D\x34\x06\x66\x09\xCF\x48\xB8\x00\x00\x00\x00\x01\x00\x00\x00\x48\x8D\x34\x06\x41\xF7\xD4\xD2\xDF\x48\x89\xE5\x41\xC0\xFC\x08\x48\x81\xEC\x40\x01\x00\x00"
 
-//exi_2 x64 test
+//exit_2 x64 test
 //#define CODE "\x0F\xB6\x06\x48\xD3\xF9\x66\xC1\xC9\xCA\x48\x81\xC6\x01\x00\x00\x00\x32\xC3\x8B\xCA\x66\x41\x0F\xBE\xCE\xB1\x46\xFE\xC8\xF6\xD0\xD0\xC0\xF5\x34\xA7\x45\x3A\xE4\x48\xC1\xC9\x10\x48\xC7\xC1\xC5\x4A\xF3\x40\x32\xD8\x49\x2B\xCE\x48\x8B\x4C\x25\x00\x41\x84\xC7\xF8\x48\x81\xC5\x08\x00\x00\x00\xF5\x48\x89\x0C\x04\x8B\x06\xF6\xC3\xC6\xF8\x48\x81\xC6\x04\x00\x00\x00\x33\xC3\xD1\xC0\xF9\x2D\x8F\x28\x92\x64\xC1\xC0\x03\xF5\x35\x6E\x05\xAC\x27\x48\xF7\xC4\xD8\x61\x78\x27\xF9\x53\x48\x0F\xBA\xE3\xAC\x40\x22\xDE\x66\x41\x0F\xBE\xDD\x31\x04\x24\x5B\xF8\x40\x80\xFC\x00\x66\x41\xF7\xC2\x0A\x05\x48\x63\xC0\xF8\x48\x03\xF8\x0F\xB6\x06\x48\x81\xC6\x01\x00\x00\x00\x66\xD3\xE9\x66\xF7\xC1\xCA\x5F\x32\xC3\x66\x0F\xB6\xCB\x48\x8B\xCF\x41\x0F\xBF\xCB\xFE\xC8\xF6\xD0\xD2\xCD\x66\xC1\xD1\xE1\x0F\x9F\xC5\xD0\xC0\x66\x0F\xBA\xF1\x27\x86\xC9\x41\x02\xCF\x34\xA7\xC0\xDD\xD0\x32\xD8\x80\xD5\x04\x66\x2B\xCC\xFE\xC9\x48\x8B\x4C\x25\x00\x41\x80\xFE\x52\x48\x81\xC5\x08\x00\x00\x00\x48\x89\x0C\x04\x8B\x06\x4D\x85\xC7\x48\x81\xC6\x04\x00\x00\x00\x33\xC3\xF5\xD1\xC0\xF8\x66\x41\x81\xFA\x5D\x08\x2D\x8F\x28\x92\x64\xF5\xC1\xC0\x03\x35\x6E\x05\xAC\x27\x66\x3B\xE7\x53\x44\x0F\xAB\xF3\x31\x04\x24\x4C\x0F\xA4\xDB\xC4\x66\x44\x0F\xAB\xEB\xF8\x5B\x40\x3A\xC7\x48\x63\xC0\x48\x03\xF8\x0F\xB6\x06\x80\xD1\xED\x66\x0F\x47\xCA\x44\x0F\xAB\xE1\x48\x81\xC6\x01\x00\x00\x00\x66\x0F\xBD\xC8\x32\xC3\x86\xCD\x0F\x9C\xC5\xFE\xC8\x66\x0F\xAB\xC9\x66\x0F\xBA\xE1\x93\xF6\xD0\xD0\xC0\x34\xA7\x66\x0F\xBA\xF9\x7D\x32\xD8\x66\x81\xE1\x6B\x30\xD2\xC5\x48\x8B\x4C\x25\x00\xF9\xF8\x48\x81\xC5\x08\x00\x00\x00\x41\xF6\xC7\x30\x48\x89\x0C\x04\x44\x0F\xAC\xC8\x94\x66\xC1\xD8\xB2\xFE\xC8\x8B\x06\xF5\x4C\x85\xEA\x48\x81\xC6\x04\x00\x00\x00\x3C\xD9\x33\xC3\xF5\xF8\xD1\xC0\xF5\xF8\x41\x84\xE1\x2D\x8F\x28\x92\x64\xF9\xC1\xC0\x03\x85\xDF\xF5\x35\x6E\x05\xAC\x27\xF9\x53\x66\x81\xCB\x86\x21\x0F\x93\xC7\xF8\x31\x04\x24\x66\x44\x0F\xBB\xEB\x5B\xF5\x66\x44\x85\xE5\xF6\xC7\xB9\x48\x63\xC0\x41\xF7\xC1\x38\x34\x6A\x58\x48\x03\xF8\x0F\xB6\x06\x66\x0F\xA3\xD9\xFE\xC9\x48\xD3\xD1\x48\x81\xC6\x01\x00\x00\x00\xFF\xC1\xC0\xF1\x13\x32\xC3\xFE\xC8\x66\x0F\xBA\xF1\x48\xD2\xD9\xF6\xD0\x66\x0F\xB3\xE9\xD0\xC0\x34\xA7\x0F\xA4\xC9\xDA\x32\xD8\x48\xFF\xC9\x48\x8B\x4C\x25\x00\x48\x81\xC5\x08\x00\x00\x00\x66\x41\x85\xCB\xF9\x48\x89\x0C\x04\x0F\xC0\xE0\x66\x2B\xC0\x8B\x06\xF8\x48\x81\xC6\x04\x00\x00\x00\x41\xF6\xC4\x38\x41\x3A\xF7\xF5\x33\xC3\xF8\xD1\xC0\x2D\x8F\x28\x92\x64\xC1\xC0\x03\x66\xF7\xC2\x1F\x2D\xF5\xF8\x35\x6E\x05\xAC\x27\x66\x41\x81\xFF\x5C\x6F\x53\x66\x87\xDB\x31\x04\x24\x5B\x48\x63\xC0\x80\xFF\xF6\xF8\x48\x03\xF8\x57"
+
 //test11.txt x64 Matteo
 //#define CODE "\xB9\x74\xC2\x7C\x27\x49\x89\xCA\xBF\x60\x6D\xFB\x1A\x44\x31\xD7\x81\xC7\x6D\xAA\x75\x40\x41\xBC\x8E\x59\xFD\x7D\x41\x31\xFC"
 
@@ -3315,7 +3320,7 @@ void reorder_instructions(List *unordered, List *ordered) {
 }
 
 void trace_instruction(csh handle, List *list, List *stack, Instruction *start, uint8_t mode) {
-	//printf(":: Trace Instruction :: %s %s (invalid: %d)\n", start->instruction->mnemonic, start->instruction->op_str, start->invalid);
+	printf(":: Trace Instruction :: %s %s (invalid: %d)\n", start->instruction->mnemonic, start->instruction->op_str, start->invalid);
 	//save the WRITE instruction
 	Instruction *new_insn = calloc(1, sizeof(Instruction));
 	new_insn->instruction = calloc(1, sizeof(cs_insn));
@@ -3338,7 +3343,7 @@ void trace_instruction(csh handle, List *list, List *stack, Instruction *start, 
 	uint8_t reg = X86_REG_INVALID;
 	uint8_t base = X86_REG_INVALID;
 	uint8_t index = X86_REG_INVALID;
-	int64_t disp = 0;
+	uint32_t disp = 0, scale = 1;
 	for(size_t i = 0; i < op_count; i++) {
 		op = &(x86->operands[i]);
 		if(op->type == X86_OP_REG && (op->access == CS_AC_WRITE || op->access == (CS_AC_READ|CS_AC_WRITE))) {
@@ -3351,7 +3356,8 @@ void trace_instruction(csh handle, List *list, List *stack, Instruction *start, 
 		if(op->type == X86_OP_MEM && (op->access == CS_AC_WRITE || op->access == (CS_AC_READ|CS_AC_WRITE))) {
 			base = op->mem.base;
 			index = op->mem.index;
-			disp = op->mem.disp;
+			disp = (uint32_t)op->mem.disp;
+			scale = (uint32_t)op->mem.scale;
 			dst_mem_found = true;
 		}
 		if(op->access == CS_AC_READ) {
@@ -3368,20 +3374,23 @@ void trace_instruction(csh handle, List *list, List *stack, Instruction *start, 
 					src_index_found = true;
 				}
 				index = op->mem.index;
-				disp = op->mem.disp;
+				disp = (uint32_t)op->mem.disp;
+				scale = (uint32_t)op->mem.scale;
 				src_mem_found = true;
 			}
 		}
 	}
-	//printf("src_imm_found: %d\n", src_imm_found);
-	//printf("src_mem_found: %d\n", src_mem_found);
-	//printf("src_reg_found: %d\n", src_reg_found);
-	//printf("dst_reg_found: %d\n", dst_reg_found);
-	//printf("dst_mem_found: %d\n", dst_mem_found);
-	//printf("dst_reg: %s\n", cs_reg_name(handle, dst_reg));
-	//printf("src_reg: %s\n", cs_reg_name(handle, reg));
-	//printf("base: %s\n", cs_reg_name(handle, base));
-	//printf("index: %s\n", cs_reg_name(handle, index));
+	printf("src_imm_found: %d\n", src_imm_found);
+	printf("src_mem_found: %d\n", src_mem_found);
+	printf("src_reg_found: %d\n", src_reg_found);
+	printf("dst_reg_found: %d\n", dst_reg_found);
+	printf("dst_mem_found: %d\n", dst_mem_found);
+	printf("dst_reg: %s\n", cs_reg_name(handle, dst_reg));
+	printf("src_reg: %s\n", cs_reg_name(handle, reg));
+	printf("base: %s\n", cs_reg_name(handle, base));
+	printf("index: %s\n", cs_reg_name(handle, index));
+	printf("disp: 0x%lx\n", disp);
+	printf("scale: 0x%lx\n", scale);
 	//checking if the destination is a memory location with CS_AC_READ|CS_AC_WRITE
 	/*if(dst_mem_found) {
 		printf("[!] Handling: %s %s\n", start->instruction->mnemonic, start->instruction->op_str);
@@ -3452,6 +3461,7 @@ void trace_instruction(csh handle, List *list, List *stack, Instruction *start, 
 	//bottom-up search for the SOURCE of this write instruction
 	Instruction *current = start->prev;
 	while(current != NULL) {
+		//printf("checking: %s %s\n", current->instruction->mnemonic, current->instruction->op_str);
 		//check if this instruction writes to the destination MEM
 		if(dst_mem_found) {
 			x86 = &(current->instruction->detail->x86);
@@ -3459,7 +3469,8 @@ void trace_instruction(csh handle, List *list, List *stack, Instruction *start, 
 			for(size_t i = 0; i < op_count; i++) {
 				op = &(x86->operands[i]);
 				if(op->type == X86_OP_MEM && (op->access == CS_AC_WRITE || op->access == (CS_AC_READ|CS_AC_WRITE))) {
-					if(op->mem.base == base && op->mem.index == index && op->mem.disp == disp) {
+					//printf("dst_mem_found: %s %s\n", current->instruction->mnemonic, current->instruction->op_str);
+					if(op->mem.base == base && op->mem.index == index && (uint32_t)op->mem.disp == disp && (uint32_t)op->mem.scale == scale) {
 						//printf("dst_mem_found: %s %s\n", current->instruction->mnemonic, current->instruction->op_str);
 						trace_instruction(handle, list, stack, current, mode);
 						dst_mem_found = false;
@@ -3495,14 +3506,14 @@ void trace_instruction(csh handle, List *list, List *stack, Instruction *start, 
 			}
 		}
 		//check if this instruction set the MEM
-		if(src_mem_found || src_base_found || src_index_found) {
+		if(src_mem_found || dst_mem_found || src_base_found || src_index_found) {
 			//trace back the memory location
 			x86 = &(current->instruction->detail->x86);
 			op_count = x86->op_count;
 			for(size_t i = 0; i < op_count; i++) {
 				op = &(x86->operands[i]);
 				if(op->type == X86_OP_MEM && (op->access == CS_AC_WRITE || op->access == (CS_AC_READ|CS_AC_WRITE))) {
-					if(op->mem.base == base && op->mem.index == index && op->mem.disp == disp) {
+					if(op->mem.base == base && op->mem.index == index && (uint32_t)op->mem.disp == disp && (uint32_t)op->mem.scale == scale) {
 						//printf("src_mem_found: %s %s\n", current->instruction->mnemonic, current->instruction->op_str);
 						trace_instruction(handle, list, stack, current, mode);
 						src_mem_found = false;
@@ -3593,7 +3604,7 @@ void trace_bottom_up_mem(csh handle, List *list, uint8_t mode) {
 	}
 	int *prev_displacements = calloc(stack_loc_num, sizeof(int));
 	//start looping all the instructions in the list
-	current = current->prev;
+	//current = current->prev;
 	while(current != NULL) {
 		//check if the instruction writes to memory
 		x86 = &(current->instruction->detail->x86);
@@ -3602,100 +3613,109 @@ void trace_bottom_up_mem(csh handle, List *list, uint8_t mode) {
 			op = &(x86->operands[i]);
 			//for now I'm only interested in CS_AC_WRITE access to memory
 			if(op->type == X86_OP_MEM && (op->access == CS_AC_WRITE || op->access == (CS_AC_READ|CS_AC_WRITE))) {
-				//check if the displacement is > disp
-				int64_t disp = op->mem.disp;
-				if(disp < 0) {
-					disp = (~disp + 1);
+				bool trace_mem = false;
+				if(is_same_register_type(op->mem.base, X86_REG_RSP)) {
+					//check if the displacement is > disp
+					int64_t disp = op->mem.disp;
+					if(disp < 0) {
+						disp = (~disp + 1);
+					}
+					//printf("disp: %llx, rsp_imm: %llx\n", disp, rsp_imm);
+					if(disp <= rsp_imm) {
+						//check if the memory location was already backtraced
+						bool already_backtraced = false;
+						for(size_t i = 0; i < stack_loc_num; i++) {
+							if(prev_displacements[i] == 0) {
+								//the current memory location was not backtraced, save the displacement and exit the loop
+								prev_displacements[i] = disp;
+								break;
+							}
+							if(prev_displacements[i] == disp) {
+								already_backtraced = true;
+								break;
+							}
+						}
+						if(!already_backtraced) {
+							trace_mem = true;
+						}
+					}
+				} else {
+					//this is not a stack memory instruction, trace is freely
+					trace_mem = true;
 				}
-				//printf("disp: %llx, rsp_imm: %llx\n", disp, rsp_imm);
-				if(disp <= rsp_imm) {
-					//check if the memory location was already backtraced
-					bool already_backtraced = false;
-					for(size_t i = 0; i < stack_loc_num; i++) {
-						if(prev_displacements[i] == 0) {
-							//the current memory location was not backtraced, save the displacement and exit the loop
-							prev_displacements[i] = disp;
-							break;
+				if(trace_mem) {
+					List *stack = ListCreate();
+					trace_instruction(handle, list, stack, current, mode);
+					//the instructions must be ordered
+					List *ordered_stack = ListCreate();
+					reorder_instructions(stack, ordered_stack);
+					remove_duplicate_instructions(handle, ordered_stack);
+					//print instructions order
+					printf("\n[+] Backtrace (mem) - RSP Displacement = 0x%llx\n", rsp_imm);
+					printf("[+] BEFORE\n");
+					print_disassembly(handle, ordered_stack, INFO);
+					//TEST
+					bool optimized;
+					do {
+						optimized = false;
+						while(patter_matching_horror(handle, ordered_stack, MODE)) {
+							optimized = true;
 						}
-						if(prev_displacements[i] == disp) {
-							already_backtraced = true;
-							break;
+						while(expand_stack_ins(handle, ordered_stack, MODE)) {
+							optimized = true;
 						}
-					}
-					if(!already_backtraced) {
-						List *stack = ListCreate();
-						trace_instruction(handle, list, stack, current, mode);
-						//the instructions must be ordered
-						List *ordered_stack = ListCreate();
-						reorder_instructions(stack, ordered_stack);
-						remove_duplicate_instructions(handle, ordered_stack);
-						//print instructions order
-						printf("\n[+] Backtrace (mem) - RSP Displacement = 0x%llx\n", rsp_imm);
-						printf("[+] BEFORE\n");
-						print_disassembly(handle, ordered_stack, INFO);
-						//TEST
-						bool optimized;
-						do {
-							optimized = false;
-							while(patter_matching_horror(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(expand_stack_ins(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(eliminate_junk(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(collapse_add_sub(handle, ordered_stack, MODE, false)) {
-								optimized = true;
-							}
-							while(eliminate_code(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							//NEED TO REDEFINE HOW IT WORKS
-							while(propagate_constant(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(eliminate_junk(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							//RUNNING OUT OF MEMORY
-							while(arithmetic_propagation(handle, ordered_stack, MODE, false)) {
-								optimized = true;
-							}
-							//printf("[PARTIAL 0]\n");
-							//print_disassembly(handle, ordered_stack, INFO);
-							while(propagate_memory(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(propagate_register(handle, ordered_stack, true, MODE)) {
-								optimized = true;
-							}
-							while(emulate_stack_arithmetic(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(emulate_memory_arithmetic(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(eliminate_useless_stack_writes(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							//only present on "trace_bottom_up_reg" --> below functions will destroy the integrity of the code
-							while(force_register_propagation(handle, ordered_stack, op->reg, MODE)) {
-								optimized = true;
-							}
-							while(arithmetic_propagation_new(handle, ordered_stack, MODE)) {
-								optimized = true;
-							}
-							while(remove_useless_regs(handle, ordered_stack, op->reg, MODE)) {
-								optimized = true;
-							}
-						} while(optimized);
-						//TEST
-						printf("[+] AFTER\n");
-						print_disassembly(handle, ordered_stack, INFO);
-						ListDestroy(stack);
-					}
+						while(eliminate_junk(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						while(collapse_add_sub(handle, ordered_stack, MODE, false)) {
+							optimized = true;
+						}
+						while(eliminate_code(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						//NEED TO REDEFINE HOW IT WORKS
+						while(propagate_constant(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						while(eliminate_junk(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						//RUNNING OUT OF MEMORY
+						while(arithmetic_propagation(handle, ordered_stack, MODE, false)) {
+							optimized = true;
+						}
+						//printf("[PARTIAL 0]\n");
+						//print_disassembly(handle, ordered_stack, INFO);
+						while(propagate_memory(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						while(propagate_register(handle, ordered_stack, true, MODE)) {
+							optimized = true;
+						}
+						while(emulate_stack_arithmetic(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						while(emulate_memory_arithmetic(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						while(eliminate_useless_stack_writes(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						//only present on "trace_bottom_up_reg" --> below functions will destroy the integrity of the code
+						while(force_register_propagation(handle, ordered_stack, op->reg, MODE)) {
+							optimized = true;
+						}
+						while(arithmetic_propagation_new(handle, ordered_stack, MODE)) {
+							optimized = true;
+						}
+						while(remove_useless_regs(handle, ordered_stack, op->reg, MODE)) {
+							optimized = true;
+						}
+					} while(optimized);
+					//TEST
+					printf("[+] AFTER\n");
+					print_disassembly(handle, ordered_stack, INFO);
+					ListDestroy(stack);
 				}
 			}
 		}
@@ -4443,6 +4463,7 @@ void trace_bottom_up_reg(csh handle, List *list, Registers *regs, uint8_t mode) 
 					//the instructions must be ordered
 					List *ordered_stack = ListCreate();
 					reorder_instructions(stack, ordered_stack);
+					remove_duplicate_instructions(handle, ordered_stack);
 					//print instructions order
 					printf("\n[+] Backtrace (reg = %s)\n", cs_reg_name(handle, op->reg));
 					printf("[BEFORE]\n");
@@ -4453,6 +4474,11 @@ void trace_bottom_up_reg(csh handle, List *list, Registers *regs, uint8_t mode) 
 						optimized = false;
 						while(patter_matching_horror(handle, ordered_stack, MODE)) {
 							optimized = true;
+						}
+						if(BUGGED) {
+							printf("BUGGED!\n");
+							print_disassembly(handle, list, INFO);
+							ExitProcess(0);
 						}
 						while(expand_stack_ins(handle, ordered_stack, MODE)) {
 							optimized = true;
@@ -8846,7 +8872,7 @@ bool emulate_stack_arithmetic(csh handle, List *list, uint8_t mode) {
 			current = prev;
 			continue;
 		}
-		//check if the instruction is a memory write
+		//check if the instruction is a memory read, writing to a register
 		if(strncmp(current->instruction->mnemonic, "mov", 3) == 0) {
 			x86 = &(current->instruction->detail->x86);
 			op_count = x86->op_count;
@@ -8888,7 +8914,7 @@ bool emulate_stack_arithmetic(csh handle, List *list, uint8_t mode) {
 				while(temp != NULL) {
 					temp_prev = temp->prev;
 					//printf("[!] Checking: %s %s\n", temp->instruction->mnemonic, temp->instruction->op_str);
-					//check if the instruction is touching the memory region
+					//check if the instruction is touching the memory region & if 'dst_reg' is read -> in these cases we must stop the search and fail
 					x86 = &(temp->instruction->detail->x86);
 					op_count = x86->op_count;
 					//reset vars
@@ -8932,8 +8958,14 @@ bool emulate_stack_arithmetic(csh handle, List *list, uint8_t mode) {
 									//printf("[+] %s is modified by (%s %s)\n", cs_reg_name(handle, src_index), temp->instruction->mnemonic, temp->instruction->op_str);
 									reg_modified = true;
 								}
-							} else {
-								src_reg = op->reg;
+							} else if(op->access == CS_AC_READ) {
+								if(is_same_register_type(dst_reg, op->reg)) {
+									printf("[!] Found an instrucion reading 'dst_reg'! Stop here!\n");
+									temp = NULL;
+									continue;
+								} else {
+									src_reg = op->reg;
+								}
 							}
 						} else if(op->type == X86_OP_IMM) {
 							src_imm = op->imm;
@@ -9099,13 +9131,15 @@ bool emulate_stack_arithmetic(csh handle, List *list, uint8_t mode) {
 		}
 		current = prev;
 	}
-	//printf("DEBUG - emulate_stack_arithmetic\n");
+	//printf("DEBUG AFTER - emulate_stack_arithmetic\n");
 	//print_disassembly(handle, list, INFO);
 	//printf("emulate_stack_arithmetic - optimized: %d\n", optimized);
 	return optimized;
 }
 
 bool emulate_memory_arithmetic(csh handle, List *list, uint8_t mode) {
+	//printf("DEBUG BEFORE - emulate_memory_arithmetic\n");
+	//print_disassembly(handle, list, INFO);
 	//printf("------- emulate_memory_arithmetic -------\n");
 	bool optimized = false;
 	Instruction *current = list->first, *next;
@@ -9157,7 +9191,7 @@ bool emulate_memory_arithmetic(csh handle, List *list, uint8_t mode) {
 			//we need to find all the instructions modifying the memory location without using unknown registers (for now)
 			Instruction *temp = current, *temp_next;
 			//useful vars
-			bool same_memory_found, using_unknown_reg;
+			bool same_memory_found, using_unknown_reg, reading_base_index, mem_read_found;
 			uint8_t mem_size, useful_insn_found = 0;
 			List *emu_list = ListCreate();
 			Instruction *fake_ins;
@@ -9169,6 +9203,8 @@ bool emulate_memory_arithmetic(csh handle, List *list, uint8_t mode) {
 				//reset flags
 				same_memory_found = false;
 				using_unknown_reg = false;
+				reading_base_index = false;
+				mem_read_found = false;
 				mem_size = 0;
 				for(size_t i = 0; i < op_count; i++) {
 					op = &(x86->operands[i]);
@@ -9179,15 +9215,32 @@ bool emulate_memory_arithmetic(csh handle, List *list, uint8_t mode) {
 								mem_size = op->size;
 								same_memory_found = true;
 							}
+						} else if(op->access == CS_AC_READ) {
+							if(op->mem.base == dst_base && op->mem.index == dst_index && (uint32_t)op->mem.scale == dst_scale && (uint32_t)op->mem.disp == dst_disp) {
+								//same memory read
+								//printf("[!] mem read: %s %s\n", temp->instruction->mnemonic, temp->instruction->op_str);
+								same_memory_found = true;
+								mem_read_found = true;
+							}
 						}
 					} else if(op->type == X86_OP_REG) {
 						//the instruction is using a possible 'unknown' register (both CS_AC_READ || CS_AC_WRITE)
 						using_unknown_reg = true;
+						//check if base/index are read/used in bewteen -> not a good sign, stop the loop
+						if(is_same_register_type(op->reg, dst_base) || is_same_register_type(op->reg, dst_index)) {
+							reading_base_index = true;
+						}
 					}
+				}
+				//checking if base or index are read in between
+				if(reading_base_index) {
+					temp = NULL;
+					continue;
 				}
 				//check if an updating instruction is found
 				if(same_memory_found) {
 					if(!using_unknown_reg) {
+						//printf("adding to list: %s %s\n", temp->instruction->mnemonic, temp->instruction->op_str);
 						//add it to the emulation fake list
 						fake_ins = (Instruction *)calloc(1, sizeof(Instruction));
 						fake_ins->instruction = (cs_insn *)calloc(1, sizeof(cs_insn));
@@ -9195,7 +9248,7 @@ bool emulate_memory_arithmetic(csh handle, List *list, uint8_t mode) {
 						ListPush(emu_list, fake_ins);
 						useful_insn_found++;
 					}
-					if((using_unknown_reg || temp_next == NULL) && useful_insn_found > 1) {
+					if((using_unknown_reg || temp_next == NULL || mem_read_found) && useful_insn_found > 1) {
 						//add a fake instruction to get the final value "mov rax, [mem]"
 						fake_ins = (Instruction *)calloc(1, sizeof(Instruction));
 						fake_ins->instruction = (cs_insn *)calloc(1, sizeof(cs_insn));
@@ -9239,9 +9292,16 @@ bool emulate_memory_arithmetic(csh handle, List *list, uint8_t mode) {
 								printf("[-] Error: reassemble() or update_disasm() - emulate_memory_arithmetic\n");
 							} else {
 								//printf("[+] New instruction: %s %s\n", fake_ins->instruction->mnemonic, fake_ins->instruction->op_str);
-								ListInsertAfter(list, temp, fake_ins);
-								//remove original instruction 'current'
+								if(mem_read_found) {
+									ListInsertBefore(list, temp, fake_ins);
+									temp_next = NULL;
+									next = temp_next;
+									//continue;
+								} else {
+									ListInsertAfter(list, temp, fake_ins);
+								}
 								ListRemove(list, current);
+								//remove original instruction 'current'
 								optimized = true;
 							}
 						}
@@ -9253,6 +9313,8 @@ bool emulate_memory_arithmetic(csh handle, List *list, uint8_t mode) {
 		//check the next instruction
 		current = next;
 	}
+	//printf("DEBUG AFTER - emulate_memory_arithmetic\n");
+	//print_disassembly(handle, list, INFO);
 	return optimized;
 }
 
@@ -9491,11 +9553,12 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 									printf("[-] Error: reassemble() or update_disasm() - emulate_memory_arithmetic\n");
 								} else {
 									printf("[*] PATTERN #1 NEW: %s %s\n", new_insn->instruction->mnemonic, new_insn->instruction->op_str);
-									ListInsertAfter(list, third, new_insn);
+									/*ListInsertAfter(list, third, new_insn);
 									ListRemove(list, current);
 									ListRemove(list, second);
 									ListRemove(list, third);
 									optimized = true;
+									//BUGGED = true;*/
 								}
 							} else if(reg_changed || reg_read) {
 								//reg1/reg2 are changed, pattern match fails
@@ -9801,7 +9864,6 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 									ListRemove(list, current);
 									ListRemove(list, second);
 									ListRemove(list, third);
-									BUGGED = true;
 									optimized = true;
 								}
 							} else if(reg_changed || reg_read || mem_changed || mem_read) {
@@ -9998,6 +10060,11 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 	}
 	/*
 		PATTERN #2
+		
+		mov reg1, 0
+		add reg1, reg2
+		--------------
+		mov reg1, reg2
 
 		mov reg1, 0
 		sub reg1, reg2
@@ -10018,7 +10085,7 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 				if(op->type == X86_OP_IMM && op->imm == 0) {
 					//find the next add/sub (if 'reg' is modified, stop the search)
 					Instruction *temp = current->next, *temp_next;
-					bool sub_found;
+					bool sub_found, add_found;
 					uint8_t reg1, reg2;
 					while(temp != NULL) {
 						temp_next = temp->next;
@@ -10037,6 +10104,9 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 									if (strncmp(temp->instruction->mnemonic, "sub", 3) == 0) {
 										reg1 = op->reg;
 										sub_found = true;
+									} else if(strncmp(temp->instruction->mnemonic, "add", 3) == 0) {
+										reg1 = op->reg;
+										add_found = true;
 									} else {
 										//stop here the search, an instruction modified 'dst_reg'
 										temp = NULL;
@@ -10078,7 +10148,18 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 										ListRemove(list, temp);
 									}
 								}
-								
+							} else if(add_found) {
+								printf("[+] Assemble: mov %s, %s\n", cs_reg_name(handle, reg1), cs_reg_name(handle, reg2));
+								Instruction *new_insn_1 = calloc(1, sizeof(Instruction));
+								new_insn_1->instruction = calloc(1, sizeof(cs_insn));
+								sprintf(new_insn_1->instruction->mnemonic, "mov");
+								sprintf(new_insn_1->instruction->op_str, "%s, %s", cs_reg_name(handle, reg1), cs_reg_name(handle, reg2));
+								if(!(reassemble(new_insn_1, mode) && update_disasm(new_insn_1, mode))) {
+									printf("[-] Error: reassemble() or update_disasm() - emulate_memory_arithmetic\n");
+								} else {
+									ListInsertAfter(list, temp, new_insn_1);
+									ListRemove(list, temp);
+								}
 							}
 						}
 						temp = temp_next;
@@ -10095,12 +10176,14 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 		PATTERN #3
 	
 		mov reg1, reg2
+		shl reg1, imm1
 		add reg1, reg3
 		memop with [reg1]
 		-----------------
 		mov reg1, reg2
+		shl reg1, imm1
 		add reg1, reg3
-		memop with [reg2 + reg3]
+		memop with [reg3 + reg2*2^imm1]
 	*/
 	current = list->last;
 	//useful vars & flags
@@ -10121,7 +10204,7 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 		for(size_t i = 0; i < op_count; i++) {
 			op = &(x86->operands[i]);
 			if(op->type == X86_OP_MEM) {
-				if(op->mem.base != X86_REG_INVALID && op->mem.index == X86_REG_INVALID && op->mem.disp == 0) {
+				if(op->mem.base != X86_REG_INVALID && op->mem.index == X86_REG_INVALID /*&& op->mem.disp == 0*/) {
 					//save current base/disp register
 					base = op->mem.base;
 					index = op->mem.index;
@@ -10145,11 +10228,12 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 		if(mem_op_found) {
 			//printf("mem_op: %s %s\n", current->instruction->mnemonic, current->instruction->op_str);
 			//we just found a memory location like: "[base + disp]" or "[base]"
-			//extract 'base' and look if, before this instruction, there is a sequence like: 'mov base, reg2 & 'add base, reg'1
+			//extract 'base' and look if, before this instruction, there is a sequence like: 'mov base, reg2' & 'shl base, imm1' & 'add base, reg1'
 			Instruction *temp = next, *temp_next;
 			//useful vars & flags
-			bool add_ins_found;
+			bool add_ins_found, disp_found = false;
 			uint8_t reg1;
+			uint32_t new_disp = 0;
 			while(temp != NULL) {
 				temp_next = temp->prev;
 				x86 = &(temp->instruction->detail->x86);
@@ -10174,16 +10258,24 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 						} else if(op->access == CS_AC_READ) {
 							reg1 = op->reg; 
 						}
+					} else if(op->type == X86_OP_IMM) {
+						if(new_disp == 0 && add_ins_found) {
+							new_disp = (uint32_t)op->imm;
+							disp_found = true;
+						}
 					}
 				}
 				//check if an add instruction (with destionation 'base') was found
 				if(add_ins_found && reg1 != X86_REG_INVALID) {
-					//we just found the instruction 'add base, reg2'
+					//printf("add_ins: %s %s\n", temp->instruction->mnemonic, temp->instruction->op_str);
+					//we just found the instruction 'add base, reg2' -> now check for the presence of 'shl base, imm1' & 'mov base, reg1'
 					Instruction *tmp = temp_next, *tmp_next;
 					//useful vars & flags
-					bool mov_ins_found;
+					bool mov_ins_found, shl_ins_found = false;
 					uint8_t reg2;
+					uint32_t shl_imm = 0;
 					while(tmp != NULL) {
+						//printf("checking: %s %s\n", tmp->instruction->mnemonic, tmp->instruction->op_str);
 						tmp_next = tmp->prev;
 						x86 = &(tmp->instruction->detail->x86);
 						op_count = x86->op_count;
@@ -10193,30 +10285,61 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 						for(size_t i = 0; i < op_count; i++) {
 							op = &(x86->operands[i]);
 							if(op->type == X86_OP_REG) {
-								if(op->access == CS_AC_WRITE) {
+								if(op->access == CS_AC_WRITE && is_same_register_type(op->reg, base)) {
 									if(strncmp(tmp->instruction->mnemonic, "mov", 3) == 0) {
 										//a 'mov' instruction is found
+										//printf("mov: %s %s\n", tmp->instruction->mnemonic, tmp->instruction->op_str);
 										mov_ins_found = true;
 									}
-								} else if(op->access == (CS_AC_READ|CS_AC_WRITE)) {
-									//stop here the execution, 'base' is modified by an instruction different from 'mov'
-									tmp = NULL;
-									continue;
+								} else if(op->access == (CS_AC_READ|CS_AC_WRITE) && is_same_register_type(op->reg, base)) {
+									if(strncmp(tmp->instruction->mnemonic, "shl", 3) == 0) {
+										//a 'shl' instruction is found
+										//printf("shl: %s %s\n", tmp->instruction->mnemonic, tmp->instruction->op_str);	
+										shl_ins_found = true;
+									} else if(strncmp(tmp->instruction->mnemonic, "add", 3) == 0) {
+										disp_found = true;
+									} else {
+										//stop here the execution, 'base' is modified by an instruction different from 'mov'
+										tmp = NULL;
+										continue;
+									}
 								} else if(op->access == CS_AC_READ) {
 									reg2 = op->reg;
+								}
+							} else if(op->type == X86_OP_IMM) {
+								if(disp_found && new_disp == 0) {
+									new_disp = (uint32_t)op->imm;
+								}
+								if(shl_imm == 0 && shl_ins_found) {
+									shl_imm = op->imm;
 								}
 							}
 						}
 						//check if a mov instruction (with destination 'base') was found
 						if(mov_ins_found && reg2 != X86_REG_INVALID) {
+							//check if shl instruction was found
+							uint32_t scale = 1;
+							if(shl_ins_found) {
+								//printf("shl_ins: %s %s\n", tmp->next->instruction->mnemonic, tmp->next->instruction->op_str);
+								//printf("shl_imm: 0x%lx\n", shl_imm);
+								for(size_t i = 0; i < shl_imm; i++) {
+									scale *= 2;
+								}
+							}
+							//check if displacement was found
+							if(disp_found) {
+								//printf("new_disp: 0x%lx\n", new_disp);
+								disp = new_disp;
+							}
+							//printf("mov_ins: %s %s\n", tmp->instruction->mnemonic, tmp->instruction->op_str);
 							//we found all the pattern, assemble the new instruction
 							Instruction *new_insn = calloc(1, sizeof(Instruction));
 							new_insn->instruction = calloc(1, sizeof(cs_insn));
 							sprintf(new_insn->instruction->mnemonic, current->instruction->mnemonic);
 							if(src_reg != X86_REG_INVALID) {
-								sprintf(new_insn->instruction->op_str, "[%s + %s + 0x%lx], %s", cs_reg_name(handle, reg1), cs_reg_name(handle, reg2), disp, cs_reg_name(handle, src_reg));
+								sprintf(new_insn->instruction->op_str, "[%s + %s*0x%lx + 0x%lx], %s", cs_reg_name(handle, reg1), cs_reg_name(handle, reg2), scale, disp, cs_reg_name(handle, src_reg));
 							} else if(dst_reg != X86_REG_INVALID) {
-								sprintf(new_insn->instruction->op_str, "%s, [%s + %s + 0x%lx]", cs_reg_name(handle, dst_reg), cs_reg_name(handle, reg1), cs_reg_name(handle, reg2), disp);
+								sprintf(new_insn->instruction->op_str, "%s, [%s + %s*0x%lx + 0x%lx]", cs_reg_name(handle, dst_reg), cs_reg_name(handle, reg1), cs_reg_name(handle, reg2), scale, disp);
 							} else if(src_imm_found) {
 								char size_indicator[20] = { 0 };
 								switch(size) {
@@ -10233,16 +10356,17 @@ bool patter_matching_horror(csh handle, List *list, uint8_t mode) {
 										sprintf(size_indicator, "qword");
 										break;
 								}
-								sprintf(new_insn->instruction->op_str, "%s [%s + %s + 0x%lx], 0x%llx", size_indicator, cs_reg_name(handle, reg1), cs_reg_name(handle, reg2), disp, src_imm);
+								sprintf(new_insn->instruction->op_str, "%s [%s + %s*0x%lx + 0x%lx], 0x%llx", size_indicator, cs_reg_name(handle, reg1), cs_reg_name(handle, reg2), scale, disp, src_imm);
 							}
 							//printf("[+] PATTER #3 %s %s\n", new_insn->instruction->mnemonic, new_insn->instruction->op_str);
 							if(!(reassemble(new_insn, mode) && update_disasm(new_insn, mode))) {
 								printf("[-] Error: reassemble() or update_disasm() - emulate_memory_arithmetic\n");
 							} else {
 								new_insn->instruction->address = current->instruction->address;
+								printf("new_ins: %s %s\n", new_insn->instruction->mnemonic, new_insn->instruction->op_str);
 								ListInsertBefore(list, current, new_insn);
 								ListRemove(list, current);
-								//print_disassembly(handle, list, INFO);
+								print_disassembly(handle, list, INFO);
 								optimized = true;
 							}
 						}
@@ -10327,10 +10451,10 @@ int main() {
 				/*while(patter_matching_horror(handle, list, MODE)) {
 					optimized = true;
 				}*/
-				while(peephole_optimize(handle, list, MODE)) {
+				/*while(peephole_optimize(handle, list, MODE)) {
 					//printf("\n\n------------ Little peephole optimizations ------------\n\n");
 					optimized = true;
-				}
+				}*/
 				while(expand_stack_ins(handle, list, MODE)) {
 					//printf("\n\n------------ Expanding stack instructions ------------\n\n");
 					optimized = true;
@@ -10394,11 +10518,13 @@ int main() {
 				while(emulate_stack_arithmetic(handle, list, MODE)) {
 					optimized = true;
 				}
-				//printf("TEMP: after emulate_stack_arithmetic\n\n");
+				//printf("TEMP: before emulate_memory_arithmetic\n\n");
 				//print_disassembly(handle, list, INFO);
 				while(emulate_memory_arithmetic(handle, list, MODE)) {
 					optimized = true;
 				}
+				//printf("TEMP: after emulate_memory_arithmetic\n\n");
+				//print_disassembly(handle, list, INFO);
 			} while(optimized);
 			if(SECOND_PASS) {
 				printf("\n\n------------ Temporary code ------------\n\n");
@@ -10422,8 +10548,6 @@ int main() {
 			}
 			do {
 				optimized = false;
-				//printf("TEMP: before code_reordering\n\n");
-				//print_disassembly(handle, list, INFO);
 				while(code_reordering(handle, list, list->first, list->last)) {
 					optimized = true;
 				}
@@ -10433,8 +10557,6 @@ int main() {
 				while(emulate_memory_arithmetic(handle, list, MODE)) {
 					optimized = true;
 				}
-				//printf("TEMP: after emulate_stack_arithmetic\n\n");
-				//print_disassembly(handle, list, INFO);
 				while(eliminate_useless_stack_writes(handle, list, MODE)) {
 					optimized = true;
 				}
@@ -10594,8 +10716,54 @@ int main() {
 		} while(optimized);
 		//second pass
 		if(SECOND_PASS) {
+			printf("TEST CORRUPTION\n");
 			//printf("\n\n------------ Temporary code ------------\n\n");
 			//print_disassembly(handle, list, INFO);
+			//printf("\n\n------------ Applying Backtrace ------------\n\n");
+			//tracing memory locations
+			//printf("[+] Tracing memory (stack) locations\n");
+			//trace_bottom_up_mem(handle, list, MODE);
+			//tracing registers
+			//printf("\n[+] Tracing registers\n");
+			//List *temp_list = ListCreate();
+			//ListCopy(temp_list, list);
+			Registers *regs = calloc(1, sizeof(Registers));
+			emulate_stack_RW(handle, list, regs, MODE);
+			//ListCopy(list, temp_list);
+			//list = temp_list;
+			//emulate_stack_RW(handle, temp_list, regs, MODE);
+			//printf("\n[+] Tracing registers\n");
+			//trace_bottom_up_reg(handle, list, regs, MODE);
+			//free(temp_list);
+			free(regs);
+		}
+		//third pass
+		if(THIRD_PASS) {
+			do {
+				optimized = false;
+				while(eliminate_junk(handle, list, MODE)) {
+					//printf("\n\n------------ Junk code elimination ------------\n\n");
+					optimized = true;
+				}
+				while(eliminate_code(handle, list, MODE)) {
+					//printf("\n\n------------ Dead code elimination ------------\n\n");
+					optimized = true;
+				}
+				while(emulate_memory_arithmetic(handle, list, MODE)) {
+					optimized = true;
+				}
+				while(patter_matching_horror(handle, list, MODE)) {
+					optimized = true;
+				}
+				while(expand_stack_ins(handle, list, MODE)) {
+					optimized = true;
+				}
+			} while(optimized);
+		}
+		//second pass
+		if(SECOND_PASS) {
+			printf("\n\n------------ Temporary code ------------\n\n");
+			print_disassembly(handle, list, INFO);
 			//printf("\n\n------------ Applying Backtrace ------------\n\n");
 			//tracing memory locations
 			printf("[+] Tracing memory (stack) locations\n");
@@ -10613,21 +10781,6 @@ int main() {
 			trace_bottom_up_reg(handle, list, regs, MODE);
 			//free(temp_list);
 			free(regs);
-		}
-		//third pass
-		if(THIRD_PASS) {
-			do {
-				optimized = false;
-				while(emulate_memory_arithmetic(handle, list, MODE)) {
-					optimized = true;
-				}
-				while(patter_matching_horror(handle, list, MODE)) {
-					optimized = true;
-				}
-				while(expand_stack_ins(handle, list, MODE)) {
-					optimized = true;
-				}
-			} while(optimized);
 		}
 		printf("\n\n------------ Final state ------------\n\n");
 		print_disassembly(handle, list, INFO);
